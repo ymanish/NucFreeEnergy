@@ -1,0 +1,3 @@
+[submodule "methods/PolyCG"]
+	path = methods/PolyCG
+	url = git@github.com:eskoruppa/PolyCG
