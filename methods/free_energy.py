@@ -4,12 +4,81 @@ import scipy as sp
 from typing import List, Tuple, Callable, Any, Dict
 
 from .PolyCG.polycg.SO3 import so3
-from .PolyCG.polycg.transform_SO3 import euler2rotmat_so3
-from .PolyCG.polycg.transform_marginals import send_to_back_permutation
+from .PolyCG.polycg.Transforms.transform_SO3 import euler2rotmat_so3
+from .PolyCG.polycg.Transforms.transform_marginals import send_to_back_permutation
 from .midstep_composites import midstep_composition_transformation, midstep_se3_groundstate
 from .read_nuc_data import read_nucleosome_triads, GenStiffness
 
+from .PolyCG.polycg.cgnaplus import cgnaplus_bps_params
 
+
+def trap_calculation_simple(M: np.ndarray, C: np.ndarray, mu: float) -> Tuple[float,float, float]:
+    
+    N  = len(M)
+    Nz = len(C) 
+    Ny = N-Nz
+    
+    My  = M[:Ny,:Ny]
+    Mz  = M[Ny:,Ny:]
+    Myz = M[Ny:,:Ny]
+    
+    M_nuc = Mz*mu
+    
+    M_chi_nuc = np.copy(M)
+    M_chi_nuc[Ny:,Ny:] += M_nuc
+    
+    b = np.zeros(N)
+    b[Ny:] = -M_nuc @ C
+    
+    c1 = 0.5 * C.T @ M_nuc @ C
+    c2 = -0.5 * b.T @ np.linalg.inv(M_chi_nuc) @ b
+    
+    betaF_entropy = 0.5 * np.linalg.slogdet(M_chi_nuc)[1]
+    betaF_enthalpy = c1 + c2
+    
+    betaF = betaF_entropy + betaF_enthalpy
+    return betaF, betaF_entropy, betaF_enthalpy
+
+
+def trap_calculation(M: np.ndarray, C: np.ndarray, mu: float) -> Tuple[float,float, float]:
+    
+    N  = len(M)
+    Nz = len(C) 
+    Ny = N-Nz
+    
+    My  = M[:Ny,:Ny]
+    Mz  = M[Ny:,Ny:]
+    Mzy = M[Ny:,:Ny]
+    Myz = M[:Ny,Ny:]
+    
+    M_nuc = Mz*mu
+    # M_nuc = np.eye(len(Mz)) * mu
+    
+    M_chi_nuc = np.copy(M)
+    M_chi_nuc[Ny:,Ny:] += M_nuc
+    
+    Dy = - np.linalg.inv(M_chi_nuc[:Ny,:Ny]) @ M_chi_nuc[:Ny,Ny:] @ C
+    
+    C0 =  np.linalg.inv(M_nuc.T) @ M_chi_nuc[Ny:,:Ny] @ Dy + np.linalg.inv(M_nuc.T) @ M_chi_nuc[Ny:,Ny:] @ C
+    
+    # print(np.linalg.inv(M_nuc.T) @ M_chi_nuc[Ny:,Ny:])
+    
+    b = np.zeros(N)
+    b[Ny:] = -M_nuc @ C0
+    
+    # D = -np.linalg.inv(M_chi_nuc) @ b
+    # print(D[Ny:]-C)
+    
+    c1 = 0.5 * C0.T @ M_nuc @ C0
+    c2 = -0.5 * b.T @ np.linalg.inv(M_chi_nuc) @ b
+    
+    betaF_entropy = 0.5 * np.linalg.slogdet(M_chi_nuc)[1]
+    betaF_enthalpy = c1 + c2
+    
+    betaF = betaF_entropy + betaF_enthalpy
+    return betaF, betaF_entropy, betaF_enthalpy
+  
+    
 
 def nucleosome_free_energy(
     groundstate: np.ndarray,
@@ -18,8 +87,18 @@ def nucleosome_free_energy(
     nucleosome_triads: np.ndarray
 ) -> np.ndarray:
     
-    midstep_constraint_locations = sorted(midstep_constraint_locations)
+    if len(midstep_constraint_locations) == 0:
+        n = len(stiffmat)
+        F_pi = -0.5*n * np.log(2*np.pi)
+        # matrix term
+        logdet_sign, logdet = np.linalg.slogdet(stiffmat)
+        F_mat = 0.5*logdet
+        F = F_mat + F_pi  
+        return F, F, 0, 0
     
+    
+    midstep_constraint_locations = sorted(midstep_constraint_locations)
+
     midstep_triads = calculate_midstep_triads(
         midstep_constraint_locations,
         nucleosome_triads
@@ -61,41 +140,28 @@ def nucleosome_free_energy(
     MM = stiffmat_rearranged[NF:,:NF]
     
     MFi = np.linalg.inv(MF)
-    const_1 = 0.5 * C.T @ MC @ C
+    b = MM.T @ C
     
-    MMTC = MM.T @ C
-    const_2 = -0.5 * MMTC.T @ MFi @ MMTC
-    
-    F_const = const_1+const_2
+    # constant energies
+    F_const_C =  0.5 * C.T @ MC @ C
+    F_const_b = -0.5 * b.T @ MFi @ b
     
     # entropy term
     n = len(MF)
+    logdet_sign, logdet = np.linalg.slogdet(MF)
     F_pi = -0.5*n * np.log(2*np.pi)
     # matrix term
-    logdet_sign, logdet = np.linalg.slogdet(MF)
     F_mat = 0.5*logdet
+    F_entropy = F_pi + F_mat
+    F_jacob = np.log(np.linalg.det(transform))
     
-    # add up contributions
-    F = F_mat + F_pi + F_const
-    
-    
-    # print(f'F_pi    = {F_pi}')
-    # print(f'F_const = {F_const}')
-    # print(f'F_mat   = {F_mat}')
-    # print(f'F       = {F}')
-    
-    # n = len(stiffmat)
-    # F_pi = -0.5*n * np.log(2*np.pi)
-    # logdet_sign, logdet = np.linalg.slogdet(stiffmat)
-    # F_free = 0.5*logdet + F_pi
-    # print(f'F_free  = {F_free}')
-    
-
-    return F, F_mat + F_pi, F_const
-    
-
-    
-    
+    Fdict = {
+        'F': F_entropy + F_jacob + F_const_C + F_const_b,
+        'F_entropy' : F_entropy,
+        'F_const'   : F_const_C + F_const_b,
+        'F_jacob'   : F_jacob
+    }
+    return Fdict
     
 
 
@@ -145,16 +211,6 @@ def midstep_composition_excess(
         s_ij = s_ij @ Smat
     d_ij = np.linalg.inv(s_ij) @ g_ij
     X = so3.se3_rotmat2euler(d_ij)
-
-    # print('##########')
-    # print(g_ij)
-    # print(s_ij)    
-    # print(d_ij)
-    # print(X)
-    # ex = np.copy(X)
-    # ex[:3] *= 180./np.pi
-    # print(ex)
-    
     return X
 
 
@@ -167,13 +223,15 @@ if __name__ == '__main__':
     
     seq = ''.join(['ATCG'[np.random.randint(4)] for i in range(147)])
     seq601 = "ATCGAGAATCCCGGTGCCGAGGCCGCTCAATTGGTCGTAGACAGCTCTAGCACCGCTTAAACGCACGTACGCGCTGTCCCCCGCGTTTTAACCGCCAAGGGGATTACTCCCTAGTCTCCAGGCACGTGTCAGATATATACATCCGAT"
+    randseq = 'TTCCACATGGATAATACAAGAGATTCATCGACGTGCTCATTTGGCATTAGGGCATCATCCTAATGAGATTCGGTGGCGCTAACAACTTCGCTGAAAGATCAGTGGAGCGAACTGCCCTACTGTTAATTGGGTACCAGACCTCCTCACATCGTTGGTAGCTCCGTTCCTCGCGGACCGCAAGGGCAAACGTCTTACGCGACATCTGTGAATCATAACTCAGTACTTTAAAGCTAGGGCGTATTATGCA'
+    
+    # seq = randseq
     seq = seq601
     
-    randseq = 'TTCCACATGGATAATACAAGAGATTCATCGACGTGCTCATTTGGCATTAGGGCATCATCCTAATGAGATTCGGTGGCGCTAACAACTTCGCTGAAAGATCAGTGGAGCGAACTGCCCTACTGTTAATTGGGTACCAGACCTCCTCACATCGTTGGTAGCTCCGTTCCTCGCGGACCGCAAGGGCAAACGTCTTACGCGACATCTGTGAATCATAACTCAGTACTTTAAAGCTAGGGCGTATTATGCA'
-
+    beta = 1./4.114
     
     stiff,gs = genstiff.gen_params(seq)
-
+    
     triadfn = os.path.join(os.path.dirname(__file__), 'State/Nucleosome.state')
     nuctriads = read_nucleosome_triads(triadfn)
 
@@ -184,26 +242,10 @@ if __name__ == '__main__':
         96, 100, 107, 111, 116, 121, 
         128, 131, 139, 143
     ]
-    # midstep_constraint_locations = [
-    #     55, 59, 
-    #     65, 69, 76, 80, 86, 90, 
-    #     96, 100, 107, 111, 116, 121, 
-    #     128, 131, 139, 143
-    # ]
-    
-    print(len(midstep_constraint_locations))
-    
-    
-    F601,F_entrop, F_entalap = nucleosome_free_energy(
-        gs,
-        stiff,
-        midstep_constraint_locations, 
-        nuctriads
-    )
-    
+        
     
     extended_601 = seq601 + seq601[:100]
-    energies = []
+    Fdicts = []
 
     sweepseq = randseq
     probs_filename = 'randseq.probs'
@@ -216,18 +258,18 @@ if __name__ == '__main__':
         print(i)
         seq = sweepseq[i:i+147]
         
-        stiff, gs = genstiff.gen_params(seq)
-        F, F_entrop, F_entalap  = nucleosome_free_energy(
+        # stiff, gs = genstiff.gen_params(seq)
+        
+        gs,stiff = cgnaplus_bps_params(seq,euler_definition=True,group_split=True)
+        
+        Fdict  = nucleosome_free_energy(
             gs,
             stiff,
             midstep_constraint_locations, 
             nuctriads
         )
+        Fdicts.append(Fdict)
 
-        energies.append([F,F_entrop, F_entalap])
-        print(F)
-        
-    
     
     probs = np.loadtxt(probs_filename)
     betaE = -np.log(probs)
@@ -242,16 +284,20 @@ if __name__ == '__main__':
     
     ax1.plot(pos,betaE,lw=1.4,color='black',zorder=0)
     
-    energies = np.array(energies)
+    Ftots = np.array([Fdict['F'] for Fdict in Fdicts])
+    Fcnst = np.array([Fdict['F_const'] for Fdict in Fdicts])
+    Fentr = np.array([Fdict['F_entropy'] for Fdict in Fdicts])
     
-    Fparts = energies - np.mean(energies,axis=0)
+    Ftots_rel = Ftots - np.mean(Ftots)
+    Fcnst_rel = Fcnst - np.mean(Fcnst)
+    Fentr_rel = Fentr - np.mean(Fentr)
+        
+    Epos   = np.arange(len(Ftots_rel))
+    ax1.plot(Epos,Ftots_rel,lw=1,color='blue',zorder=2)
+    ax2.plot(Epos,Fentr_rel,lw=1,color='green')
+    ax3.plot(Epos,Fcnst_rel,lw=1,color='red')
     
-    Epos   = np.arange(len(Fparts))
-    ax1.plot(Epos,Fparts[:,0],lw=1,color='blue',zorder=2)
-    ax2.plot(Epos,Fparts[:,1],lw=1,color='green')
-    ax3.plot(Epos,Fparts[:,2],lw=1,color='red')
-    
-    ax1.plot(Epos,Fparts[:,2],lw=1,color='red',alpha=0.7,zorder=1)
+    ax1.plot(Epos,Fcnst_rel,lw=1,color='red',alpha=0.7,zorder=1)
     
     tick_pad            = 2
     axlinewidth         = 0.9

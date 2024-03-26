@@ -32,7 +32,8 @@ class GenStiffness:
         equi = np.loadtxt(fnequi)
         stiff = np.loadtxt(fnstiff)
         equi_triad = so3.se3_midstep2triad(equi)                
-        stiff_group = so3.se3_algebra2group_stiffmat(equi,stiff,translation_as_midstep=True)        
+        stiff_group = so3.se3_algebra2group_stiffmat(equi,stiff,translation_as_midstep=True)  
+                      
         dimer = {
             'seq' : seq,
             'group_gs':   equi_triad,
@@ -103,4 +104,6 @@ if __name__ == '__main__':
         g = np.linalg.inv(nuctriads[i]) @ nuctriads[i+1]
         X = so3.se3_rotmat2euler(g)
         X[:3] *= 180/np.pi
-        print(X)
+        # print(X)
+    
+    print(N)
