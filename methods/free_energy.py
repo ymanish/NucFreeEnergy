@@ -258,9 +258,9 @@ if __name__ == '__main__':
         print(i)
         seq = sweepseq[i:i+147]
         
-        # stiff, gs = genstiff.gen_params(seq)
+        stiff, gs = genstiff.gen_params(seq)
         
-        gs,stiff = cgnaplus_bps_params(seq,euler_definition=True,group_split=True)
+        # gs,stiff = cgnaplus_bps_params(seq,euler_definition=True,group_split=True)
         
         Fdict  = nucleosome_free_energy(
             gs,
