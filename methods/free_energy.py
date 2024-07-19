@@ -97,7 +97,7 @@ def nucleosome_free_energy(
         return F, F, 0, 0
     
     
-    midstep_constraint_locations = sorted(midstep_constraint_locations)
+    midstep_constraint_locations = sorted(list(set(midstep_constraint_locations)))
 
     midstep_triads = calculate_midstep_triads(
         midstep_constraint_locations,
