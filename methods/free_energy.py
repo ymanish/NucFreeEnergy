@@ -155,11 +155,18 @@ def nucleosome_free_energy(
     F_entropy = F_pi + F_mat
     F_jacob = np.log(np.linalg.det(transform))
     
+    # free energy of unconstrained DNA
+    ff_logdet_sign, ff_logdet = np.linalg.slogdet(stiffmat)
+    ff_pi = -0.5*len(stiffmat) * np.log(2*np.pi)
+    F_free = 0.5*ff_logdet + ff_pi
+    
+    # prepare output
     Fdict = {
         'F': F_entropy + F_jacob + F_const_C + F_const_b,
-        'F_entropy' : F_entropy,
+        'F_entropy' : F_entropy + F_jacob,
         'F_const'   : F_const_C + F_const_b,
-        'F_jacob'   : F_jacob
+        'F_jacob'   : F_jacob,
+        'F_free'    : F_free
     }
     return Fdict
     
@@ -252,14 +259,13 @@ if __name__ == '__main__':
     sweepseq = extended_601
     probs_filename = '601.probs'
 
-
     for i in range(len(sweepseq)-146):
         
         print(i)
         seq = sweepseq[i:i+147]
         
         stiff, gs = genstiff.gen_params(seq)
-        
+
         # gs,stiff = cgnaplus_bps_params(seq,euler_definition=True,group_split=True)
         
         Fdict  = nucleosome_free_energy(
