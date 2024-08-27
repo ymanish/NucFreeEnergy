@@ -1,1 +1,2 @@
 from .free_energy import nucleosome_free_energy
+from .read_nuc_data import read_nucleosome_triads, GenStiffness
