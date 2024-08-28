@@ -4,8 +4,8 @@ import scipy as sp
 from typing import List, Tuple, Callable, Any, Dict
 
 from .PolyCG.polycg.SO3 import so3
-from .PolyCG.polycg.Transforms.transform_SO3 import euler2rotmat_so3
-from .PolyCG.polycg.Transforms.transform_marginals import send_to_back_permutation
+from .PolyCG.polycg.transforms.transform_SO3 import euler2rotmat_so3
+from .PolyCG.polycg.transforms.transform_marginals import send_to_back_permutation
 from .midstep_composites import midstep_composition_transformation, midstep_se3_groundstate
 from .read_nuc_data import read_nucleosome_triads, GenStiffness
 
