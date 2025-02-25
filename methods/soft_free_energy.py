@@ -73,7 +73,8 @@ def soft_free_energy(
             'F_entropy' : F,
             'F_enthalpy': 0,
             'F_jacob'   : 0,
-            'F_free'    : F
+            'F_free'    : F,
+            'D_diff'    : 0
         }
         return Fdict
     
