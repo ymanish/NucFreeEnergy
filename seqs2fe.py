@@ -16,10 +16,10 @@ from methods.free_energy import nucleosome_free_energy
 if __name__ == '__main__':
     
     seqsfns = sys.argv[1:]
+    model = 'MD'
+    model = 'crystal'
     
     for seqsfn in seqsfns:
-    
-        model = 'MD'
         seqs = []
         with open(seqsfn, "r") as f:
             lines = [line.strip() for line in f.readlines() if line.strip() != '']
@@ -57,5 +57,5 @@ if __name__ == '__main__':
             
             print(fes[i])
             
-        outname = os.path.splitext(seqsfn)[0] + '_fe'
+        outname = f'{os.path.splitext(seqsfn)[0]}_{model}_fe'
         np.save(outname,fes)
