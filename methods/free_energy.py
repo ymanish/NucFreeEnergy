@@ -134,6 +134,9 @@ def nucleosome_free_energy(
         MC = stiffmat_rearranged[NF:,NF:]
         MM = stiffmat_rearranged[NF:,:NF]
         
+        shift[3::6] = 0
+        shift[4::6] = 0
+        
         C = C - shift
         
         MFi = np.linalg.inv(MF)
@@ -218,7 +221,7 @@ def nucleosome_free_energy_(
     #     nucleosome_triads
     # )
     
-    # find contraint excess values
+    # find contraint excess values3::]
     excess_vals = midstep_excess_vals(
         groundstate,
         midstep_constraint_locations,
@@ -601,7 +604,129 @@ def nucleosome_groundstate(
         
         gs = gs.reshape((len(gs)//6,6))
         # find composite transformation
-        transform, replaced_ids = midstep_composition_transformation_correction(
+        transform, replaced_ids, shift = midstep_composition_transformation_correction(
+            groundstate,
+            midstep_constraint_locations,
+            gs
+        )
+        
+        # transform stiffness matrix
+        inv_transform = np.linalg.inv(transform)
+        stiffmat_transformed = inv_transform.T @ stiffmat @ inv_transform
+        
+        # rearrange stiffness matrix
+        full_replaced_ids = list()
+        for i in range(len(replaced_ids)):
+            full_replaced_ids += [6*replaced_ids[i]+j for j in range(6)]
+        
+        P = send_to_back_permutation(len(stiffmat),full_replaced_ids)
+        stiffmat_rearranged = P @ stiffmat_transformed @ P.T
+
+        # select fluctuating, constraint and coupling part of matrix
+        N  = len(stiffmat)
+        NC = len(full_replaced_ids)
+        NF = N-NC
+        
+        MF = stiffmat_rearranged[:NF,:NF]
+        MC = stiffmat_rearranged[NF:,NF:]
+        MM = stiffmat_rearranged[NF:,:NF]
+        
+        shift[3::6] = 0
+        shift[4::6] = 0
+        
+        C = C - shift
+        MFi = np.linalg.inv(MF)
+        b = MM.T @ C
+        
+        alpha = -MFi @ b
+        
+        gs_transf_perm = np.concatenate((alpha,C))
+        gs_transf = P.T @ gs_transf_perm
+        gs = inv_transform @ gs_transf
+        
+        # gs = gs.reshape((len(gs)//6,6))
+    return gs
+
+def nucleosome_groundstate_old(
+    groundstate: np.ndarray,
+    stiffmat: np.ndarray,
+    midstep_constraint_locations: List[int],  # index of the lower (left-hand) triad neighboring the constraint midstep-triad
+    nucleosome_triads: np.ndarray,
+    use_correction: bool = False
+) -> np.ndarray:
+    
+    if len(midstep_constraint_locations) == 0:
+        n = len(stiffmat)
+        F_pi = -0.5*n * np.log(2*np.pi)
+        # matrix term
+        logdet_sign, logdet = np.linalg.slogdet(stiffmat)
+        F_mat = 0.5*logdet
+        F = F_mat + F_pi  
+        return F, F, 0, 0
+    
+    
+    midstep_constraint_locations = sorted(list(set(midstep_constraint_locations)))
+
+    midstep_triads = calculate_midstep_triads(
+        midstep_constraint_locations,
+        nucleosome_triads
+    )
+    
+    # find contraint excess values
+    excess_vals = midstep_excess_vals(
+        groundstate,
+        midstep_constraint_locations,
+        midstep_triads
+    )
+    C = excess_vals.flatten()
+        
+    # find composite transformation
+    transform, replaced_ids = midstep_composition_transformation(
+        groundstate,
+        midstep_constraint_locations
+    )
+    # print(replaced_ids)
+    # print(len(transform)//6)
+    # sys.exit()
+    
+    # transform stiffness matrix
+    inv_transform = np.linalg.inv(transform)
+    stiffmat_transformed = inv_transform.T @ stiffmat @ inv_transform
+    
+    # rearrange stiffness matrix
+    full_replaced_ids = list()
+    for i in range(len(replaced_ids)):
+        full_replaced_ids += [6*replaced_ids[i]+j for j in range(6)]
+     
+    P = send_to_back_permutation(len(stiffmat),full_replaced_ids)
+    stiffmat_rearranged = P @ stiffmat_transformed @ P.T
+
+    # select fluctuating, constraint and coupling part of matrix
+    N  = len(stiffmat)
+    NC = len(full_replaced_ids)
+    NF = N-NC
+    
+    MF = stiffmat_rearranged[:NF,:NF]
+    MC = stiffmat_rearranged[NF:,NF:]
+    MM = stiffmat_rearranged[NF:,:NF]
+    
+    MFi = np.linalg.inv(MF)
+    b = MM.T @ C
+    
+    alpha = -MFi @ b
+    
+    gs_transf_perm = np.concatenate((alpha,C))
+    gs_transf = P.T @ gs_transf_perm
+    gs = inv_transform @ gs_transf
+    
+    
+    ####################################
+    
+    if use_correction:
+        
+        gs = gs.reshape((len(gs)//6,6))
+        # find composite transformation
+        transform, replaced_ids = midstep_composition_transformation_correction_old(
             groundstate,
             midstep_constraint_locations,
             -gs
@@ -628,6 +753,7 @@ def nucleosome_groundstate(
         MC = stiffmat_rearranged[NF:,NF:]
         MM = stiffmat_rearranged[NF:,:NF]
         
+        C = C
         MFi = np.linalg.inv(MF)
         b = MM.T @ C
         
