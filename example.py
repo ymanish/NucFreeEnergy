@@ -1,4 +1,5 @@
-import numpy as np 
+import numpy as np
+import sys 
 from  methods import nucleosome_free_energy, nucleosome_groundstate, read_nucleosome_triads, GenStiffness
 
 genstiff = GenStiffness(method='hybrid')   # alternatively you can use the 'crystal' method for the Olson data
@@ -10,7 +11,8 @@ seq601 = "ATCGAGAATCCCGGTGCCGAGGCCGCTCAATTGGTCGTAGACAGCTCTAGCACCGCTTAAACGCACGTAC
 
 seq601  = "CTGGAGAATCCCGGTGCCGAGGCCGCTCAATTGGTCGTAGACAGCTCTAGCACCGCTTAAACGCACGTACGCGCTGTCCCCCGCGTTTTAACCGCCAAGGGGATTACTCCCTAGTCTCCAGGCACGTGTCAGATATATACATCCTGT"
 # seq601 = 'TTCCACATGGATAATACAAGAGATTCATCGACGTGCTCATTTGGCATTAGGGCATCATCCTAATGAGATTCGGTGGCGCTAACAACTTCGCTGAAAGATCAGTGGAGCGAACTGCCCTACTGTTAATTGGGTACCAGACCTCCTCAC'
-# seq601 = 'ATTTGGCCTTAAAAAAACTTCCCCCTTCGCTATACAAGAGATTCATCGGAAAGATCAGTGGAGCGAACTGCCCTACATCATCCTAATGAGATTCGGTGCTGTTAATTGGGTACCAGACTTCCACGCGAAAAAATCGCGGGGGCACGA'
+
+seq601 = 'ATTTGGCCTTAAAAAAACTTCCCCCTTCGCTATACAAGAGATTCATCGGAAAGATCAGTGGAGCGAACTGCCCTACATCATCCTAATGAGATTCGGTGCTGTTAATTGGGTACCAGACTTCCACGCGAAAAAATCGCGGGGGCACGA'
     
 
 seq = seq601
@@ -28,8 +30,9 @@ midstep_constraint_locations = [
     128, 131, 139, 143
 ]
 
-Fdict = nucleosome_free_energy(groundstate,stiffmat,midstep_constraint_locations,nuctriads)
+Fdict = nucleosome_free_energy(groundstate,stiffmat,midstep_constraint_locations,nuctriads,use_correction=True)
 print(Fdict)
+sys.exit()
 
 gs = nucleosome_groundstate(groundstate,stiffmat,midstep_constraint_locations,nuctriads)
 gs = gs.reshape(len(gs)//6,6)
