@@ -134,8 +134,8 @@ def nucleosome_free_energy(
         MC = stiffmat_rearranged[NF:,NF:]
         MM = stiffmat_rearranged[NF:,:NF]
         
-        # shift[3::6] = 0
-        # shift[4::6] = 0
+        shift[3::6] = 0
+        shift[4::6] = 0
         
         C = C - shift
         
