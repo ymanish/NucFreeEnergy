@@ -110,19 +110,19 @@ def midstep_composition_block(
     ################################  
     # set middle blocks (i < k < j)
     for k in range(i,j+1):
-        Saccu = midstep_Saccu(srots,k+1,j)
+        Saccu = rot_accu(srots,k+1,j)
         comp_block[:3,k*6:k*6+3]   = Saccu.T
         comp_block[3:,k*6+3:k*6+6] = Saccu.T
         
         coup = np.zeros((3,3))
         for l in range(k+1,j+1):
-            coup += so3.hat_map(-midstep_Saccu(srots,l,j).T @ trans[l])
+            coup += so3.hat_map(-rot_accu(srots,l,j).T @ trans[l])
         coup = coup @ Saccu.T
         comp_block[3:,k*6:k*6+3] = coup
     
     ################################  
     # set first block (i)
-    Saccu = midstep_Saccu(srots,i+1,j)
+    Saccu = rot_accu(srots,i+1,j)
     Phi_0 = Phi0s[0]
     H_half = so3.splittransform_algebra2group(0.5*Phi_0)
     Hinv   = so3.splittransform_group2algebra(Phi_0)
@@ -135,7 +135,7 @@ def midstep_composition_block(
     coup = np.zeros((3,3))
     # first term
     for l in range(1,j+1):
-        coup += so3.hat_map(-midstep_Saccu(srots,l,j).T @ trans[l])
+        coup += so3.hat_map(-rot_accu(srots,l,j).T @ trans[l])
     coup = coup @ Saccu.T
     # second term
     coup += Saccu.T @ srots[i].T @ so3.hat_map(trans[i])
@@ -180,7 +180,191 @@ def midstep_composition_transformation_correction(
     shifts = np.array(shifts).flatten()
     return mat, replaced_ids, shifts
 
+
 def midstep_composition_block_correction(
+    groundstate: np.ndarray,
+    deformations: np.ndarray
+) -> np.ndarray:
+    if len(groundstate) < 2:
+        raise ValueError(f'midstep_composition_block: groundstate needs to contain at least two elements. {len(groundstate)} provided.')
+     
+    if len(groundstate) != len(deformations):
+        raise ValueError('Dimsional mismatch between groundstate and deformation')
+    
+    N = len(groundstate)
+    ndims = 6
+    N = len(groundstate)
+    i = 0
+    j = N-1
+    
+    ################################################
+    ################################################
+    # assign groundstate components
+    
+    # Euler vectors
+    Phi0s = groundstate[:,:3]
+    # static rotation matrices
+    srots = np.zeros((N,3,3))
+    # left half-step
+    srots[0]  = so3.euler2rotmat(0.5*Phi0s[0])    
+    # right half-step
+    srots[-1] = so3.euler2rotmat(0.5*Phi0s[-1])    
+    # bulf steps
+    for l in range(1,len(srots)-1):
+        srots[l] = so3.euler2rotmat(Phi0s[l])
+    
+    # assign translation vectors
+    strans = np.copy(groundstate[:,3:])
+    strans[0] = 0.5* srots[0].T @ strans[0] 
+    strans[-1] = 0.5*strans[-1]
+    
+    ################################################
+    ################################################
+    # assign deformation components
+    # D^0
+    # Phi^0
+    # R^0
+    
+    # Euler Vectors
+    Phid0 = deformations[:,:3]
+    
+    # dynamic rotation matrices
+    drots = np.zeros((N,3,3))
+    # left half-step
+    Phi_0 = Phi0s[0]
+    H_half = so3.splittransform_algebra2group(0.5*Phi_0)
+    Hinv   = so3.splittransform_group2algebra(Phi_0)
+    Hprod  = H_half @ Hinv
+    drots[0]  = so3.euler2rotmat(0.5*Hprod @ Phid0[0]) 
+    # right half-step
+    Phi_0 = Phi0s[-1]
+    H_half = so3.splittransform_algebra2group(0.5*Phi_0)
+    Hinv   = so3.splittransform_group2algebra(Phi_0)
+    Hprod  = H_half @ Hinv
+    drots[-1]  = so3.euler2rotmat(0.5*Hprod @ Phid0[-1]) 
+    # bulk steps
+    for l in range(1,len(drots)-1):
+        drots[l] = so3.euler2rotmat(Phid0[l])
+        
+    ################################################
+    ################################################
+    # pre compute repeatedly occuring products
+    
+    Rrots = np.zeros(srots.shape)
+    for l in range(len(drots)):
+        Rrots[l] = srots[l] @ drots[l]
+    
+    ################################################
+    # products of static rotation matrices
+    # S_{[l,j]}
+    S_lj = np.zeros((N+1,3,3))
+    curr = np.eye(3)
+    S_lj[N] = curr
+    for k in range(N):
+        curr = srots[N-1-k] @ curr
+        S_lj[N-1-k] = curr
+        
+    ################################################
+    # translational component of composites
+    # s_{(l,j)}
+    s_lj = np.zeros((N+1,3))
+    for l in range(N):
+        scomp = np.zeros(3)
+        for k in range(l,N):
+            scomp += rot_accu(srots,l,k-1) @ strans[k]
+        s_lj[l] = scomp
+
+    ################################################
+    # lambda_k
+
+    lambdak = np.zeros((N,3))
+    for k in range(N):
+        lambsum = np.zeros(3)
+        # j+1 = N
+        for l in range(k+1,N):
+            lambsum += rot_accu(Rrots,k+1,l-1) @ srots[l] @ (drots[l] - np.eye(3)) @ s_lj[l+1]
+        lambdak[k] = lambsum
+
+    ################################################
+    ################################################
+    # compose composite block
+    comp_block = np.zeros((ndims,N*ndims))
+    const      = np.zeros(6)
+
+    ################################  
+    # set middle blocks (i < k < j)
+    for l in range(i,j+1):
+        prefac = S_lj[i].T @ rot_accu(Rrots,i,l-1) @ srots[l]
+
+        if l == i:
+            Phi_0 = Phi0s[0]
+            H_half = so3.splittransform_algebra2group(0.5*Phi_0)
+            Hinv   = so3.splittransform_group2algebra(Phi_0)
+            Hprod  = H_half @ Hinv
+            
+            # rot
+            comp_block[:3,l*6:l*6+3] = 0.5 * S_lj[l+1].T @ Hprod
+            # trans
+            comp_block[3:,l*6+3:l*6+6] = 0.5 * prefac
+            # coupling and constant
+            phid0_i = 0.5 * Hprod @ Phid0[0]            
+            Hmat    = so3.splittransform_algebra2group(phid0_i)
+            hspdlamHmat = so3.hat_map(s_lj[l+1]) + drots[l] @ so3.hat_map(lambdak[l]) @ Hmat
+            # rot-trans coupling
+            comp_block[3:,l*6:l*6+3]   = -0.5 * prefac @ hspdlamHmat @ Hprod
+            # const
+            const[3:] += prefac @ ( (drots[l] - np.eye(3)) @ s_lj[l+1] +  hspdlamHmat @ phid0_i ) 
+                        
+        elif l == j:
+            Phi_0 = Phi0s[-1]
+            H_half = so3.splittransform_algebra2group(0.5*Phi_0)
+            Hinv   = so3.splittransform_group2algebra(Phi_0)
+            Hprod  = H_half @ Hinv
+            # rot
+            comp_block[:3,l*6:l*6+3] = 0.5 * Hprod
+            # trans
+            comp_block[3:,l*6+3:l*6+6] = 0.5 * prefac
+            # no constant
+        else:
+            # rot
+            comp_block[:3,l*6:l*6+3]   = S_lj[l+1].T
+            # trans
+            comp_block[3:,l*6+3:l*6+6] = prefac
+            # coupling and constant
+            Hmat = so3.splittransform_algebra2group(Phid0[l])
+            hspdlamHmat = so3.hat_map(s_lj[l+1]) + drots[l] @ so3.hat_map(lambdak[l]) @ Hmat
+            # rot-trans coupling
+            comp_block[3:,l*6:l*6+3] = -prefac @ hspdlamHmat
+            # const
+            const[3:] += prefac @ ( (drots[l] - np.eye(3)) @ s_lj[l+1] +  hspdlamHmat @ Phid0[l] ) 
+            
+    return comp_block,const
+
+
+def midstep_composition_transformation_correction_prev(
+    groundstate: np.ndarray,
+    midstep_constraint_locations: List[int],
+    correction: np.ndarray
+) -> np.ndarray:
+    N = len(groundstate)
+    mat = np.eye(N*6)
+    replaced_ids = []
+    shifts = []
+    for i in range(len(midstep_constraint_locations)-1):
+        id1 = midstep_constraint_locations[i]
+        id2 = midstep_constraint_locations[i+1]
+        replace_id = id2
+        partial_gs = groundstate[id1:id2+1]
+        partial_correction = correction[id1:id2+1]
+        midstep_comp_block,shift = midstep_composition_block_correction_prev(partial_gs,partial_correction)
+        shifts.append(shift)        
+        mat[replace_id*6:replace_id*6+6,id1*6:id2*6+6] = midstep_comp_block
+        replaced_ids.append(replace_id)
+    shifts = np.array(shifts).flatten()
+    return mat, replaced_ids, shifts
+
+
+def midstep_composition_block_correction_prev(
     groundstate: np.ndarray,
     deformations: np.ndarray
 ) -> np.ndarray:
@@ -195,7 +379,6 @@ def midstep_composition_block_correction(
     N = len(groundstate)
     i = 0
     j = N-1
-    
     
     ################################################
     ################################################
@@ -267,7 +450,7 @@ def midstep_composition_block_correction(
     for l in range(N):
         scomp = np.zeros(3)
         for k in range(l,N):
-            scomp += midstep_Saccu(srots,l,k-1) @ strans[k]
+            scomp += rot_accu(srots,l,k-1) @ strans[k]
         s_lj[l] = scomp
 
     # print(so3.rotmat2euler(S_ikm1[0])*180/np.pi)
@@ -286,13 +469,13 @@ def midstep_composition_block_correction(
     # for l in range(N):
     #     scomp = np.zeros(3)
     #     for k in range(l,N):
-    #         scomp += midstep_Saccu(rrots,l,k-1) @ strans[k]
+    #         scomp += rot_accu(rrots,l,k-1) @ strans[k]
     #     s_lj[l] = scomp
 
     # l = 0
     # scomp = np.zeros(3)
     # for k in range(l,N):
-    #     scomp += midstep_Saccu(rrots,l,k-1) @ strans[k]
+    #     scomp += rot_accu(rrots,l,k-1) @ strans[k]
     # s_lj[l] = scomp
 
 
@@ -304,15 +487,15 @@ def midstep_composition_block_correction(
     # ################################  
     # # set middle blocks (i < k < j)
     # for k in range(i,j+1):
-    #     Saccu = midstep_Saccu(srots,k+1,j)
-    #     Raccu = midstep_Saccu(rrots,k+1,j)
+    #     Saccu = rot_accu(srots,k+1,j)
+    #     Raccu = rot_accu(rrots,k+1,j)
     #     comp_block[:3,k*6:k*6+3]   = Saccu.T
     #     comp_block[3:,k*6+3:k*6+6] = Raccu.T
     #     # comp_block[3:,k*6+3:k*6+6] = Saccu.T
         
     #     coup = np.zeros((3,3))
     #     for l in range(k+1,j+1):
-    #         coup += so3.hat_map(-midstep_Saccu(srots,l,j).T @ strans[l])
+    #         coup += so3.hat_map(-rot_accu(srots,l,j).T @ strans[l])
     #     coup = coup @ Raccu.T
     #     comp_block[3:,k*6:k*6+3] = coup
     
@@ -332,9 +515,7 @@ def midstep_composition_block_correction(
         
         ho_rot = prefac @ (drots[l]-np.eye(3)-so3.hat_map(Phids[l]))
         
-
-        # prefac = midstep_Saccu(rrots,k+1,j).T
-        
+        # prefac = rot_accu(rrots,k+1,j).T
         # TEST: This should be the uncorrected version
         # prefac = S_lj[l+1].T
         
@@ -352,15 +533,14 @@ def midstep_composition_block_correction(
             comp_block[3:,l*6:l*6+3]   = 0.5 * prefac @ ( srots[i].T @ so3.hat_map(strans[i]) - shat ) @ Hprod
             # comp_block[3:,l*6:l*6+3]   = 0.5 * prefac @ ( - shat ) @ Hprod
             
-            
             # scomp = np.zeros(3)
             # for k in range(l+1,N):
-            #     scomp += midstep_Saccu(rrots,l+1,k-1) @ strans[k]
+            #     scomp += rot_accu(rrots,l+1,k-1) @ strans[k]
             # shat = so3.hat_map(scomp)
             
-            # comp_block[3:,l*6:l*6+3]   = 0.5 * midstep_Saccu(rrots,i+1,j).T @ ( srots[i].T @ so3.hat_map(strans[i]) - shat ) @ Hprod
+            # comp_block[3:,l*6:l*6+3]   = 0.5 * rot_accu(rrots,i+1,j).T @ ( srots[i].T @ so3.hat_map(strans[i]) - shat ) @ Hprod
             # print(prefac)
-            # print(midstep_Saccu(srots,i+1,j).T)
+            # print(rot_accu(srots,i+1,j).T)
             # # sys.exit()
             
             # compare = np.copy(comp_block[:6,l*6:l*6+6])
@@ -402,25 +582,22 @@ def midstep_composition_block_correction(
             # ########################################
             # # TEST
             
-            # Raccu = midstep_Saccu(rrots,i+1,j)
-            
+            # Raccu = rot_accu(rrots,i+1,j)
             # comp_block[3:,l*6+3:l*6+6] = Raccu.T
             
             # coup = np.zeros((3,3))
             # for k in range(l+1,j+1):
-            #     coup += so3.hat_map(-midstep_Saccu(rrots,k,j).T @ strans[k])
+            #     coup += so3.hat_map(-rot_accu(rrots,k,j).T @ strans[k])
             # # coup = coup @ S_lj[l+1].T
             # coup = coup @ Raccu.T
             
-            
             # print(-S_lj[l+1].T @ shat)
             # print(coup)
-
         
     ################################  
     # set first block (i)
-    Saccu = midstep_Saccu(srots,i+1,j)
-    Raccu = midstep_Saccu(rrots,i+1,j)
+    Saccu = rot_accu(srots,i+1,j)
+    Raccu = rot_accu(rrots,i+1,j)
     Phi_0 = Phi0s[0]
     H_half = so3.splittransform_algebra2group(0.5*Phi_0)
     Hinv   = so3.splittransform_group2algebra(Phi_0)
@@ -433,7 +610,7 @@ def midstep_composition_block_correction(
     coup = np.zeros((3,3))
     # first term
     for l in range(1,j+1):
-        coup += so3.hat_map(-midstep_Saccu(rrots,l,j).T @ strans[l])
+        coup += so3.hat_map(-rot_accu(rrots,l,j).T @ strans[l])
     coup = coup @ Raccu.T
     # second term
     coup += Saccu.T @ srots[i].T @ so3.hat_map(strans[i])
@@ -542,25 +719,25 @@ def midstep_composition_block_correction_old(
     ################################  
     # set middle blocks (i < k < j)
     for k in range(i,j+1):
-        Saccu = midstep_Saccu(srots,k+1,j)
-        Raccu = midstep_Saccu(rrots,k+1,j)
+        Saccu = rot_accu(srots,k+1,j)
+        Raccu = rot_accu(rrots,k+1,j)
         comp_block[:3,k*6:k*6+3]   = Saccu.T
         comp_block[3:,k*6+3:k*6+6] = Raccu.T
         # comp_block[3:,k*6+3:k*6+6] = Saccu.T
         
         coup = np.zeros((3,3))
         for l in range(k+1,j+1):
-        #     coup += so3.hat_map(-midstep_Saccu(srots,l,j).T @ trans[l])
+        #     coup += so3.hat_map(-rot_accu(srots,l,j).T @ trans[l])
         # coup = coup @ Saccu.T
-            coup += so3.hat_map(-midstep_Saccu(rrots,l,j).T @ strans[l])
-            # coup += so3.hat_map(-midstep_Saccu(srots,l,j).T @ strans[l])
+            coup += so3.hat_map(-rot_accu(rrots,l,j).T @ strans[l])
+            # coup += so3.hat_map(-rot_accu(srots,l,j).T @ strans[l])
         coup = coup @ Raccu.T
         comp_block[3:,k*6:k*6+3] = coup
             
     ################################  
     # set first block (i)
-    Saccu = midstep_Saccu(srots,i+1,j)
-    Raccu = midstep_Saccu(rrots,i+1,j)
+    Saccu = rot_accu(srots,i+1,j)
+    Raccu = rot_accu(rrots,i+1,j)
     Phi_0 = Phi0s[0]
     H_half = so3.splittransform_algebra2group(0.5*Phi_0)
     Hinv   = so3.splittransform_group2algebra(Phi_0)
@@ -573,7 +750,7 @@ def midstep_composition_block_correction_old(
     coup = np.zeros((3,3))
     # first term
     for l in range(1,j+1):
-        coup += so3.hat_map(-midstep_Saccu(rrots,l,j).T @ strans[l])
+        coup += so3.hat_map(-rot_accu(rrots,l,j).T @ strans[l])
     coup = coup @ Raccu.T
     # second term
     coup += Saccu.T @ srots[i].T @ so3.hat_map(strans[i])
@@ -596,11 +773,11 @@ def midstep_composition_block_correction_old(
     return comp_block
 
 
-def midstep_Saccu(srots: np.ndarray,i,j) -> np.ndarray:
-    saccu = np.eye(3)
+def rot_accu(rots: np.ndarray,i,j) -> np.ndarray:
+    raccu = np.eye(3)
     for k in range(i,j+1):
-        saccu = saccu @ srots[k]
-    return saccu
+        raccu = raccu @ rots[k]
+    return raccu
 
 
 # def midstep_srots_and_trans(groundstate: np.ndarray) -> np.ndarray:
