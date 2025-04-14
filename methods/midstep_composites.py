@@ -337,7 +337,7 @@ def midstep_composition_block_correction(
             comp_block[3:,l*6:l*6+3] = -prefac @ hspdlamHmat
             # const
             const[3:] += prefac @ ( (drots[l] - np.eye(3)) @ s_lj[l+1] +  hspdlamHmat @ Phid0[l] ) 
-            
+    
     return comp_block,const
 
 
