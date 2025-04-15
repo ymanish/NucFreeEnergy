@@ -33,9 +33,9 @@ def nucleosome_free_energy(
         Fdict = {
             'F': F,
             'F_entropy' : F,
-            'F_const'   : 0,
+            'F_enthalpy'   : 0,
             'F_jacob'   : 0,
-            'F_free'    : F
+            'F_freedna'    : F
         }
         return Fdict
     
@@ -170,9 +170,9 @@ def nucleosome_free_energy(
     Fdict = {
         'F': F_entropy + F_jacob + F_const_C + F_const_b,
         'F_entropy' : F_entropy + F_jacob,
-        'F_const'   : F_const_C + F_const_b,
+        'F_enthalpy'   : F_const_C + F_const_b,
         'F_jacob'   : F_jacob,
-        'F_free'    : F_free
+        'F_freedna'    : F_free
     }
     return Fdict
 
@@ -196,9 +196,9 @@ def nucleosome_free_energy_(
         Fdict = {
             'F': F,
             'F_entropy' : F,
-            'F_const'   : 0,
+            'F_enthalpy'   : 0,
             'F_jacob'   : 0,
-            'F_free'    : F
+            'F_freedna'    : F
         }
         return Fdict
     
@@ -361,9 +361,9 @@ def nucleosome_free_energy_(
     Fdict = {
         'F': F_entropy + F_jacob + F_enth,
         'F_entropy' : F_entropy + F_jacob,
-        'F_const'   : F_enth,
+        'F_enthalpy'   : F_enth,
         'F_jacob'   : F_jacob,
-        'F_free'    : F_free
+        'F_freedna'    : F_free
     }
     return Fdict
 
@@ -386,9 +386,9 @@ def nucleosome_free_energy_old(
         Fdict = {
             'F': F,
             'F_entropy' : F,
-            'F_const'   : 0,
+            'F_enthalpy'   : 0,
             'F_jacob'   : 0,
-            'F_free'    : F
+            'F_freedna'    : F
         }
         return Fdict
     
@@ -518,9 +518,9 @@ def nucleosome_free_energy_old(
     Fdict = {
         'F': F_entropy + F_jacob + F_const_C + F_const_b,
         'F_entropy' : F_entropy + F_jacob,
-        'F_const'   : F_const_C + F_const_b,
+        'F_enthalpy'   : F_const_C + F_const_b,
         'F_jacob'   : F_jacob,
-        'F_free'    : F_free
+        'F_freedna'    : F_free
     }
     return Fdict
 

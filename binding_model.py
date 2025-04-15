@@ -136,7 +136,7 @@ def binding_model_free_energy(
             'F_entropy' : F,
             'F_enthalpy': 0,
             'F_jacob'   : 0,
-            'F_free'    : F
+            'F_freedna'    : F
         }
         return Fdict
     
@@ -330,11 +330,11 @@ def binding_model_free_energy(
     
     # prepare output
     Fdict = {
-        'F': F_entropy + F_enthalpy - F_free,
-        'F_entropy' : F_entropy - F_free,
+        'F': F_entropy + F_enthalpy,
+        'F_entropy' : F_entropy,
         'F_enthalpy': F_enthalpy,
         'F_jacob'   : F_jacob,
-        'F_free'    : F_free,
+        'F_freedna'    : F_free,
         'gs'        : gs
     }
     return Fdict
