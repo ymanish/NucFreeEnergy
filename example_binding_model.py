@@ -64,16 +64,6 @@ nucout = binding_model_free_energy(
     use_correction=True,
 )
 
-# nucout = binding_model_free_energy_old(
-#     groundstate,
-#     stiffmat,    
-#     nuc_mu0,
-#     K,
-#     left_open=0,
-#     right_open=0,
-#     use_correction=True,
-# )
-
 for key in nucout:
     if key == 'gs':
         continue
