@@ -31,12 +31,6 @@ def get_midstep_locations(left_open: int, right_open: int, base_locations = None
         locs = sorted(list(set(locs)))
     return locs
 
-def submatrix(M, dim: int = 6, left_open: int = 0, right_open: int = 0, marginalize=False):
-    n = len(M)//dim
-    if marginalize:
-        return np.linalg.inv(np.linalg.inv(M)[left_open*dim:(n-right_open)*dim,left_open*dim:(n-right_open)*dim])
-    return M[left_open*dim:(n-right_open)*dim,left_open*dim:(n-right_open)*dim]
-
 def Hinverse(Psi):
     psih = so3.hat_map(Psi)
     psihsq = psih @ psih
@@ -113,6 +107,207 @@ def coordinate_transformation_correction(muk0s,sks,Z_delta_ref):
 
 
 def binding_model_free_energy(
+    free_gs: np.ndarray,
+    free_M: np.ndarray,    
+    nuc_mu0_full: np.ndarray,
+    nuc_K_full: np.ndarray,
+    left_open: int = 0,
+    right_open: int = 0,
+    use_correction: bool = True,
+) -> np.ndarray:
+
+    midstep_constraint_locations = get_midstep_locations(left_open, right_open)
+    if len(midstep_constraint_locations) <= 1:
+        n = len(free_M)
+        F_pi = -0.5*n * np.log(2*np.pi)
+        # matrix term
+        logdet_sign, logdet = np.linalg.slogdet(free_M)
+        F_mat = 0.5*logdet
+        F = F_mat + F_pi  
+        Fdict = {
+            'F': F,
+            'F_entropy' : F,
+            'F_enthalpy': 0,
+            'F_jacob'   : 0,
+            'F_freedna'    : F
+        }
+        return Fdict
+    
+    sks = midstep_groundstate_se3(free_gs,midstep_constraint_locations)
+    
+    # select midstep triads and their stiffness 
+    nuc_mu0 = nuc_mu0_full[left_open:len(nuc_mu0_full)-right_open]
+    nuc_K = nuc_K_full[6*left_open:len(nuc_K_full)-6*right_open,6*left_open:len(nuc_K_full)-6*right_open]
+    
+    # find composite transformation
+    transform, replaced_ids = midstep_composition_transformation(
+        free_gs,
+        midstep_constraint_locations
+    )
+    
+    # transform stiffness matrix
+    inv_transform = np.linalg.inv(transform)
+    M_transformed = inv_transform.T @ free_M @ inv_transform
+    
+    # rearrange stiffness matrix
+    full_replaced_ids = list()
+    for i in range(len(replaced_ids)):
+        full_replaced_ids += [6*replaced_ids[i]+j for j in range(6)]
+     
+    P = send_to_back_permutation(len(free_M),full_replaced_ids)
+    M_rearranged = P @ M_transformed @ P.T
+    
+    # select M and R submatrices
+    N  = len(M_rearranged)
+    NC = len(full_replaced_ids)
+    NF = N-NC
+    
+    M_R = M_rearranged[:NF,:NF]
+    M_M = M_rearranged[NF:,NF:]
+    M_RM = M_rearranged[:NF,NF:]
+    
+    # Calculate M block marginal
+    M_Mp = M_M - M_RM.T @ np.linalg.inv(M_R) @ M_RM
+    M_Mp = 0.5*(M_Mp+M_Mp.T)
+    
+
+    ##############################################
+    # Binding Model
+    ##############################################
+    
+    nuc_K *= 1
+    
+    # Calculate Incidence Matrix
+    B, Pbar = coordinate_transformation(nuc_mu0,sks)  
+    Kcomb = nuc_K + B.T @ M_Mp @ B
+    # calculate ground state
+    alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
+    
+    B, Pbar = coordinate_transformation_correction(nuc_mu0,sks,alpha)
+    Kcomb = nuc_K + B.T @ M_Mp @ B
+    # calculate ground state
+    alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
+    
+    
+    Y_C = Pbar + B @ alpha
+    F_enthalpy = 0.5* Pbar.T @ ( M_Mp - M_Mp @ B @ np.linalg.inv(Kcomb) @ B.T @ M_Mp ) @ Pbar
+    # print(f'F_enthalpy = {F_enthalpy}')
+    
+    gamma = -np.linalg.inv(M_R) @ M_RM @ Y_C
+    
+    if use_correction:
+    
+        gs_transf_perm = np.concatenate((gamma,Y_C))
+        gs_transf = P.T @ gs_transf_perm
+        gs = inv_transform @ gs_transf
+
+        gs = gs.reshape((len(gs)//6,6))
+        # find composite transformation
+        transform, replaced_ids, shift = midstep_composition_transformation_correction(
+            free_gs,
+            midstep_constraint_locations,
+            gs
+        )
+        
+        # transform stiffness matrix
+        inv_transform = np.linalg.inv(transform)
+        M_transformed = inv_transform.T @ free_M @ inv_transform
+        
+        # rearrange stiffness matrix
+        full_replaced_ids = list()
+        for i in range(len(replaced_ids)):
+            full_replaced_ids += [6*replaced_ids[i]+j for j in range(6)]
+        
+        P = send_to_back_permutation(len(free_M),full_replaced_ids)
+        M_rearranged = P @ M_transformed @ P.T
+        
+        # select M and R submatrices
+        N  = len(M_rearranged)
+        NC = len(full_replaced_ids)
+        NF = N-NC
+        
+        M_R = M_rearranged[:NF,:NF]
+        M_M = M_rearranged[NF:,NF:]
+        M_RM = M_rearranged[:NF,NF:]
+        
+        # Calculate M block marginal
+        M_Mp = M_M - M_RM.T @ np.linalg.inv(M_R) @ M_RM
+        M_Mp = 0.5*(M_Mp+M_Mp.T)
+        
+        ##############################################
+        # Binding Model
+        ##############################################
+        
+        # Calculate Incidence Matrix
+        B, Pbar = coordinate_transformation(nuc_mu0,sks)  
+        
+        Kcomb = nuc_K + B.T @ M_Mp @ B
+        # calculate ground state
+        alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
+        
+        B, Pbar = coordinate_transformation_correction(nuc_mu0,sks,alpha)
+        Kcomb = nuc_K + B.T @ M_Mp @ B 
+        
+        # b -> b - a
+        Pbar -= shift
+        
+        # calculate ground state
+        alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
+        
+        Y_C = Pbar + B @ alpha
+        gamma = -np.linalg.inv(M_R) @ M_RM @ Y_C
+        
+        F_enthalpy = 0.5* Pbar.T @ ( M_Mp - M_Mp @ B @ np.linalg.inv(Kcomb) @ B.T @ M_Mp ) @ Pbar
+        # print(f'F_enthalpy = {F_enthalpy}')
+        
+    gs_transf_perm = np.concatenate((gamma,Y_C))
+    gs_transf = P.T @ gs_transf_perm
+    gs = inv_transform @ gs_transf
+        
+    # Z entropy term
+    n = len(Kcomb)
+    logdet_sign, logdet_K = np.linalg.slogdet(Kcomb)
+    F_piK = -0.5*n * np.log(2*np.pi)
+    Z_entropy = 0.5*logdet_K + F_piK
+    
+    # Z entropy term
+    n = len(M_R)
+    logdet_sign, logdet_R = np.linalg.slogdet(M_R)
+    F_piR = -0.5*n * np.log(2*np.pi)
+    R_entropy = 0.5*logdet_R + F_piR
+    
+    # jacobian A
+    # F_jacob = np.log(np.linalg.det(transform))
+    signjacob, F_Ajacob = np.linalg.slogdet(transform)
+        
+    # volume element B
+    signBlogdet, Blogdet = np.linalg.slogdet(B@B.T)
+    F_Bjacob = 0.5*Blogdet
+    
+
+    # Full entropy term
+    F_entropy = Z_entropy + R_entropy + F_Ajacob + F_Bjacob
+    
+    
+    # free energy of unconstrained DNA
+    ff_logdet_sign, ff_logdet = np.linalg.slogdet(free_M)
+    ff_pi = -0.5*len(free_M) * np.log(2*np.pi)
+    F_free = 0.5*ff_logdet + ff_pi
+    
+    # prepare output
+    Fdict = {
+        'F': F_entropy + F_enthalpy,
+        'F_entropy' : F_entropy,
+        'F_enthalpy': F_enthalpy,
+        'F_Ajacob'   : F_Ajacob,
+        'F_Bjacob'   : F_Bjacob,
+        'F_freedna'    : F_free,
+        # 'gs'        : gs
+    }
+    return Fdict
+
+
+def binding_model_free_energy_old(
     free_gs: np.ndarray,
     free_M: np.ndarray,    
     nuc_mu0: np.ndarray,
@@ -257,8 +452,6 @@ def binding_model_free_energy(
         
         B, Pbar = coordinate_transformation_correction(nuc_mu0,sks,alpha)
         Kcomb = nuc_K + B.T @ M_Mp @ B 
-        
-        
         
         # Kbare = nuc_K - B.T @ M_Mp @ B 
         # eigenvals, Q = np.linalg.eigh(Kbare)
