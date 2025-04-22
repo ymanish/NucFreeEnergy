@@ -35,7 +35,7 @@ def nucleosome_free_energy(
             'F_entropy' : F,
             'F_enthalpy'   : 0,
             'F_jacob'   : 0,
-            'F_freedna'    : F
+            'F_freedna'    : F,
         }
         return Fdict
     
@@ -631,8 +631,8 @@ def nucleosome_groundstate(
         MC = stiffmat_rearranged[NF:,NF:]
         MM = stiffmat_rearranged[NF:,:NF]
         
-        shift[3::6] = 0
-        shift[4::6] = 0
+        # shift[3::6] = 0
+        # shift[4::6] = 0
         
         C = C - shift
         MFi = np.linalg.inv(MF)

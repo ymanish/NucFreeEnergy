@@ -28,6 +28,11 @@ seq = seq601
     
 
 stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+
+# from methods.PolyCG import polycg
+# groundstate,stiffmat = polycg.cgnaplus_bps_params(seq,group_split=True)
+
+
 triadfn = 'methods/State/Nucleosome.state'
 nuctriads = read_nucleosome_triads(triadfn)
 
@@ -49,24 +54,133 @@ nuc_mu0 = calculate_midstep_triads(
 Kentries = np.array([1,1,1,10,10,10])*1
 
 diags = np.concatenate([Kentries]*len(nuc_mu0))
-K = np.diag(diags)
+K1_10 = np.diag(diags)
 
-left_open = 4
-right_open = 4
+left_open = 0
+right_open = 0
+
+print('##################################')
+print('K_1-10')
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    K1_10,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+    
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+
+Kmd_comb     = np.load('MDParams/nuc_K_comb.npy')
+Kmd_raw     = np.load('MDParams/nuc_K.npy')
+Kmd_pos = np.load('MDParams/nuc_K_pos.npy')
+Kmd_pos_resc = np.load('MDParams/nuc_K_posresc.npy')
+def free_energy(K):
+    sgn, slogdet = np.linalg.slogdet(K)
+    return 0.5*slogdet
+
+print(free_energy(Kmd_pos))
+print(free_energy(Kmd_pos_resc))
+
+print('##################################')
+print('K_raw')
+
+# Kmd     = np.load('MDParams/nuc_K_nsym.npy')
+# Kmd_pos = np.load('MDParams/nuc_K_nsym_pos.npy')
 
 nucout = binding_model_free_energy(
     groundstate,
     stiffmat,    
     nuc_mu0,
-    K,
+    Kmd_raw,
     left_open=left_open,
     right_open=right_open,
     use_correction=True,
 )
-
 for key in nucout:
-    if key == 'gs':
+    if key in ['gs','alphas']:
         continue
     print(f'{key} = {nucout[key]}')
-    
 print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+    
+    
+print('##################################')
+print('K_comb')
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    Kmd_comb,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+print('##################################')
+print('K_pos')
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    Kmd_pos,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+print('##################################')
+print('K_pos_resc')
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    Kmd_pos_resc,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+
+print('##################################')
+print('K_pos_resc')
+
+Kinf = np.copy(Kmd_comb)*1000000000000
+
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    Kinf,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+

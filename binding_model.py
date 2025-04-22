@@ -175,7 +175,7 @@ def binding_model_free_energy(
     # Binding Model
     ##############################################
     
-    nuc_K *= 1
+    # nuc_K *= 1
     
     # Calculate Incidence Matrix
     B, Pbar = coordinate_transformation(nuc_mu0,sks)  
@@ -187,7 +187,6 @@ def binding_model_free_energy(
     Kcomb = nuc_K + B.T @ M_Mp @ B
     # calculate ground state
     alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
-    
     
     Y_C = Pbar + B @ alpha
     F_enthalpy = 0.5* Pbar.T @ ( M_Mp - M_Mp @ B @ np.linalg.inv(Kcomb) @ B.T @ M_Mp ) @ Pbar
@@ -203,6 +202,17 @@ def binding_model_free_energy(
 
         gs = gs.reshape((len(gs)//6,6))
         # find composite transformation
+        
+        # try:
+        #     transform, replaced_ids, shift = midstep_composition_transformation_correction(
+        #         free_gs,
+        #         midstep_constraint_locations,
+        #         gs
+        #     )
+        # except np.linalg.LinAlgError:
+        #     for g in gs:
+        #         print(g)        
+        
         transform, replaced_ids, shift = midstep_composition_transformation_correction(
             free_gs,
             midstep_constraint_locations,
@@ -253,7 +263,6 @@ def binding_model_free_energy(
         
         # calculate ground state
         alpha = -np.linalg.inv(Kcomb) @ B.T @ M_Mp @ Pbar
-        
         Y_C = Pbar + B @ alpha
         gamma = -np.linalg.inv(M_R) @ M_RM @ Y_C
         
@@ -263,6 +272,8 @@ def binding_model_free_energy(
     gs_transf_perm = np.concatenate((gamma,Y_C))
     gs_transf = P.T @ gs_transf_perm
     gs = inv_transform @ gs_transf
+       
+    alphas = alpha.reshape((len(alpha)//6,6))
         
     # Z entropy term
     n = len(Kcomb)
@@ -284,9 +295,8 @@ def binding_model_free_energy(
     signBlogdet, Blogdet = np.linalg.slogdet(B@B.T)
     F_Bjacob = 0.5*Blogdet
     
-
     # Full entropy term
-    F_entropy = Z_entropy + R_entropy + F_Ajacob + F_Bjacob
+    F_entropy = Z_entropy + R_entropy + F_Ajacob #+ F_Bjacob
     
     
     # free energy of unconstrained DNA
@@ -299,10 +309,11 @@ def binding_model_free_energy(
         'F': F_entropy + F_enthalpy,
         'F_entropy' : F_entropy,
         'F_enthalpy': F_enthalpy,
-        'F_Ajacob'   : F_Ajacob,
-        'F_Bjacob'   : F_Bjacob,
-        'F_freedna'    : F_free,
-        # 'gs'        : gs
+        'F_Ajacob'  : F_Ajacob,
+        'F_Bjacob'  : F_Bjacob,
+        'F_freedna' : F_free,
+        'gs'        : gs,
+        'alphas'    : alphas
     }
     return Fdict
 
