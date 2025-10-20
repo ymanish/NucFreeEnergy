@@ -202,17 +202,6 @@ def binding_model_free_energy(
 
         gs = gs.reshape((len(gs)//6,6))
         # find composite transformation
-        
-        # try:
-        #     transform, replaced_ids, shift = midstep_composition_transformation_correction(
-        #         free_gs,
-        #         midstep_constraint_locations,
-        #         gs
-        #     )
-        # except np.linalg.LinAlgError:
-        #     for g in gs:
-        #         print(g)        
-        
         transform, replaced_ids, shift = midstep_composition_transformation_correction(
             free_gs,
             midstep_constraint_locations,
@@ -342,7 +331,8 @@ def binding_model_free_energy_old(
             'F_entropy' : F,
             'F_enthalpy': 0,
             'F_jacob'   : 0,
-            'F_freedna'    : F
+            'F_freedna' : F,
+            'gs'        : np.zeros(n)
         }
         return Fdict
     
@@ -542,3 +532,197 @@ def binding_model_free_energy_old(
         'gs'        : gs
     }
     return Fdict
+
+
+
+if __name__ == '__main__':
+    
+    
+    genstiff = GenStiffness(method='hybrid')   # alternatively you can use the 'crystal' method for the Olson data
+    seq  = "CTGGAGAATCCCGGTGCCGAGGCCGCTCAATTGGTCGTAGACAGCTCTAGCACCGCTTAAACGCACGTACGCGCTGTCCCCCGCGTTTTAACCGCCAAGGGGATTACTCCCTAGTCTCCAGGCACGTGTCAGATATATACATCCTGT"
+
+    stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+
+    triadfn = 'methods/State/Nucleosome.state'
+    nuctriads = read_nucleosome_triads(triadfn)
+
+    midstep_constraint_locations = [
+        2, 6, 14, 17, 24, 29, 
+        34, 38, 45, 49, 55, 59, 
+        65, 69, 76, 80, 86, 90, 
+        96, 100, 107, 111, 116, 121, 
+        128, 131, 139, 143
+    ]
+    
+    nuc_mu0 = calculate_midstep_triads(
+        midstep_constraint_locations,
+        nuctriads
+    )
+            
+    left_open = 0
+    right_open = 0
+    nuc_K_pos_resc_sym    = np.load('MDParams/nuc_K_pos_resc_sym.npy')
+
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+    
+    
+    
+    nuc_K_pos_resc_sym    = np.load('MDParams/2stride_nuc_midsteps_sym_nuc_K_posresc.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+    
+    
+    
+    nuc_K_pos_resc_sym    = np.load('MDParams/5stride_nuc_midsteps_sym_nuc_K_posresc.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+    
+    
+    nuc_K_pos_resc_sym    = np.load('MDParams/5stride_nuc_midsteps_nuc_K_pos_resc_sym.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+    
+    ############################################
+
+    nuc_K_pos_resc_sym    = np.load('MDParams/5stride_nuc_midsteps_nuc_K_pos_resc_sym.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+    
+    ############################################
+
+    nuc_K_pos_resc_sym    = np.load('MDParams/2stride_nuc_midsteps_nuc_K_pos_resc_sym.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+
+    nuc_K_pos_resc_sym    = np.load('MDParams/2stride_nuc_midsteps_sym_nuc_K_pos_resc_sym.npy')
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+
+
+    nuc_K_pos_resc_sym    = np.load('../Data/MD_parameters/2stride_ms_triads_K_pos_resc.npy')*0.02
+    print('##################################')
+    print('Calculate model')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        nuc_K_pos_resc_sym,
+        left_open=left_open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    
+    print(f"F:   {nucout['F']}")
+    print(f"F_E: {nucout['F_entropy']}")
+    print(f"F_S: {nucout['F_enthalpy']}")
+
+    print(f"dF:  {nucout['F'] - nucout['F_freedna']}")
+
+    # for key in nucout:
+    #     print(key)

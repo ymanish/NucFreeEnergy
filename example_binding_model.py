@@ -9,6 +9,8 @@ import numpy as np
 from  methods import nucleosome_free_energy, nucleosome_groundstate, read_nucleosome_triads, GenStiffness, calculate_midstep_triads
 from binding_model import binding_model_free_energy, binding_model_free_energy_old
 
+def revert_sense(seq):
+    return ''.join([{'A':'T','T':'A','C':'G','G':'C'}[b] for b in seq[::-1]])
 
 
 genstiff = GenStiffness(method='hybrid')   # alternatively you can use the 'crystal' method for the Olson data
@@ -25,9 +27,12 @@ seq601  = "CTGGAGAATCCCGGTGCCGAGGCCGCTCAATTGGTCGTAGACAGCTCTAGCACCGCTTAAACGCACGTA
     
 
 seq = seq601
+revseq = revert_sense(seq)
     
-
 stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+
+
+stiffmat_rev, groundstate_rev = genstiff.gen_params(revseq,use_group=True)
 
 # from methods.PolyCG import polycg
 # groundstate,stiffmat = polycg.cgnaplus_bps_params(seq,group_split=True)
@@ -78,10 +83,12 @@ for key in nucout:
 print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
 
 
-Kmd_comb     = np.load('MDParams/nuc_K_comb.npy')
-Kmd_raw     = np.load('MDParams/nuc_K.npy')
-Kmd_pos = np.load('MDParams/nuc_K_pos.npy')
-Kmd_pos_resc = np.load('MDParams/nuc_K_posresc.npy')
+Kmd_comb        = np.load('MDParams/nuc_K_comb.npy')
+Kmd_raw         = np.load('MDParams/nuc_K.npy')
+Kmd_pos         = np.load('MDParams/nuc_K_pos.npy')
+Kmd_pos_resc_old  = np.load('MDParams/nuc_K_posresc_old.npy')
+Kmd_pos_resc    = np.load('MDParams/nuc_K_posresc.npy')
+nuc_K_pos_resc_sym    = np.load('MDParams/nuc_K_pos_resc_sym.npy')
 def free_energy(K):
     sgn, slogdet = np.linalg.slogdet(K)
     return 0.5*slogdet
@@ -164,7 +171,61 @@ print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
 
 
 print('##################################')
-print('K_pos_resc')
+print('K_pos_resc_rev')
+nucout = binding_model_free_energy(
+    groundstate_rev,
+    stiffmat_rev,    
+    nuc_mu0,
+    Kmd_pos_resc,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+print('##################################')
+print('K_pos_resc_old')
+nucout = binding_model_free_energy(
+    groundstate,
+    stiffmat,    
+    nuc_mu0,
+    Kmd_pos_resc_old,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+
+print('##################################')
+print('K_pos_resc_rev_old')
+nucout = binding_model_free_energy(
+    groundstate_rev,
+    stiffmat_rev,    
+    nuc_mu0,
+    Kmd_pos_resc_old,
+    left_open=left_open,
+    right_open=right_open,
+    use_correction=True,
+)
+for key in nucout:
+    if key in ['gs','alphas']:
+        continue
+    print(f'{key} = {nucout[key]}')
+print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
+
+
+print('##################################')
+print('K_pos_resc stiff')
+
 
 Kinf = np.copy(Kmd_comb)*1000000000000
 
@@ -184,3 +245,40 @@ for key in nucout:
 print(f'F_diff = {nucout["F"]-nucout["F_freedna"]}')
 
 
+print('##############################################')
+print('##############################################')
+print('##############################################')
+
+K = nuc_K_pos_resc_sym
+# K = K1_10
+# K = Kmd_pos_resc_old
+
+for open in range(28):
+    print(f'open = {open}')
+    
+    print(f'{open} {right_open} ')
+    nucout = binding_model_free_energy(
+        groundstate,
+        stiffmat,    
+        nuc_mu0,
+        K,
+        left_open=open,
+        right_open=right_open,
+        use_correction=True,
+    )
+    print(f'{left_open} {open} ')
+    # print(nucout["F"]-nucout["F_freedna"])
+    print(nucout["F_enthalpy"])
+    nucout = binding_model_free_energy(
+        groundstate_rev,
+        stiffmat_rev,    
+        nuc_mu0,
+        K,
+        left_open=left_open,
+        right_open=open,
+        use_correction=True,
+    )
+    # print(nucout["F"]-nucout["F_freedna"])
+    print(nucout["F_enthalpy"])
+
+    

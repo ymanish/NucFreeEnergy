@@ -10,6 +10,7 @@ import random
 import matplotlib.pyplot as plt
 from  methods import nucleosome_free_energy, nucleosome_groundstate, read_nucleosome_triads, GenStiffness, calculate_midstep_triads
 from binding_model import binding_model_free_energy, binding_model_free_energy_old
+from methods.PolyCG.polycg import cgnaplus_bps_params
 
 
 def plot_dF(seqsdata,refs,gccont,seqs,savefn,labels=None,subtract_free=False):
@@ -147,8 +148,14 @@ if __name__ == '__main__':
 
     method = 'crystal'
     # method = 'hybrid'
+    method = 'cgNAplus'
 
-    genstiff = GenStiffness(method=method)   # alternatively you can use the 'crystal' method for the Olson data
+    genstiffmethods = ['crystal','hybrid']
+
+    if method.lower() in genstiffmethods:
+        genstiff = GenStiffness(method=method)   # alternatively you can use the 'crystal' method for the Olson data
+    
+    
     triadfn = 'methods/State/Nucleosome.state'
     nuctriads = read_nucleosome_triads(triadfn)
 
@@ -234,7 +241,13 @@ if __name__ == '__main__':
         left_open  = nopen
         right_open = nopen
 
-        stiffmat,groundstate = genstiff.gen_params(refseq,use_group=True)
+        if method.lower() in genstiffmethods:
+            stiffmat,groundstate = genstiff.gen_params(refseq,use_group=True)
+        elif method.lower() in ['cgnaplus']:
+            groundstate,stiffmat = cgnaplus_bps_params(refseq,group_split=True)
+        else:
+            raise ValueError(f'Unknown Method {method}')
+        
         refs = []
         for K in Kmats:
             nucout = binding_model_free_energy(
@@ -251,7 +264,12 @@ if __name__ == '__main__':
         seqsdata = []
         for i,seq in enumerate(seqs):
             print(i)
-            stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+            if method.lower() in genstiffmethods:
+                stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+            elif method.lower() in ['cgnaplus']:
+                groundstate,stiffmat = cgnaplus_bps_params(seq,group_split=True)
+            else:
+                raise ValueError(f'Unknown Method {method}')
             seqdata = []
             for K in Kmats:
                 nucout = binding_model_free_energy(
@@ -307,7 +325,12 @@ if __name__ == '__main__':
         left_open  = nopen
         right_open = nopen
 
-        stiffmat,groundstate = genstiff.gen_params(refseq,use_group=True)
+        # stiffmat,groundstate = genstiff.gen_params(refseq,use_group=True)
+        if method.lower() in genstiffmethods:
+            stiffmat,groundstate = genstiff.gen_params(refseq,use_group=True)
+        else:
+            groundstate,stiffmat = cgnaplus_bps_params(refseq,group_split=True)
+        
         refs = []
         for K in Kmats:
             nucout = binding_model_free_energy(
@@ -324,7 +347,12 @@ if __name__ == '__main__':
         seqsdata = []
         for i,seq in enumerate(seqs):
             print(i)
-            stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+            
+            if method.lower() in genstiffmethods:
+                stiffmat,groundstate = genstiff.gen_params(seq,use_group=True)
+            else:
+                groundstate,stiffmat = cgnaplus_bps_params(seq,group_split=True)
+                
             seqdata = []
             for K in Kmats:
                 nucout = binding_model_free_energy(

@@ -1,6 +1,7 @@
 import sys, os, glob
 import numpy as np
-from scipy.sparse import lil_matrix
+import scipy as sp
+# from scipy.sparse import lil_matrix
 from typing import List, Tuple, Callable, Any, Dict
 from .PolyCG.polycg.SO3 import so3
 
@@ -88,11 +89,8 @@ class GenStiffness:
 
     def gen_params(self, seq: str, use_group: bool = False, sparse: bool = False):
         N = len(seq) - 1
-        if sparse:
-            stiff = lil_matrix((6 * N, 6 * N))
-        else:
-            stiff = np.zeros((6 * N, 6 * N))
         gs = np.zeros((N, 6))
+        blocks = []
         for i in range(N):
             bp = seq[i : i + 2].upper()
             if use_group:
@@ -101,92 +99,42 @@ class GenStiffness:
             else:
                 pstiff = self.dimers[bp]["stiff"]
                 pgs = self.dimers[bp]["equi"]
-
-            
-            # np.set_printoptions(linewidth=250,precision=8,suppress=True)
-            # def is_pos_def(x):
-            #     return np.all(np.linalg.eigvals(x) > 0)
-            
-            
-            # # # REDUCE TRANSLATIONAL STIFFNESS
-            # # pstiff[3:,:] *= 0.5
-            # # pstiff[:,3:] *= 0.5
-            
-            # # REDUCE ROTATIONAL STIFFNESS
-            # # pstiff[:3,:] *= 0.5
-            # # pstiff[:,:3] *= 0.5
-            # # pstiff[3:,3:] *= 1
-            
-            # print(pstiff)
-            # if not is_pos_def(pstiff):
-            #     print('is not posdef')
-            #     raise
-
-            stiff[6 * i : 6 * i + 6, 6 * i : 6 * i + 6] = pstiff
+            blocks.append(pstiff)
             gs[i] = pgs
         
         if sparse:
-            stiff = stiff.tocsc()
+            stiff = sp.sparse.block_diag(blocks, format='csr')
+        else:
+            stiff = np.zeros((6 * N, 6 * N))
+            for i,block in enumerate(blocks):
+                stiff[6 * i : 6 * i + 6, 6 * i : 6 * i + 6] = block
         return stiff,gs
 
 
-class GenStiffness_:
-    
-    def __init__(self, method: str = 'md'):
-        self.method = method
-        self.load_from_file()
+    # def gen_params(self, seq: str, use_group: bool = False, sparse: bool = False):
+    #     N = len(seq) - 1
+    #     if sparse:
+    #         stiff = lil_matrix((6 * N, 6 * N))
+    #     else:
+    #         stiff = np.zeros((6 * N, 6 * N))
+    #     gs = np.zeros((N, 6))
+    #     for i in range(N):
+    #         bp = seq[i : i + 2].upper()
+    #         if use_group:
+    #             pstiff = self.dimers[bp]["group_stiff"]
+    #             pgs = self.dimers[bp]["group_gs"]
+    #         else:
+    #             pstiff = self.dimers[bp]["stiff"]
+    #             pgs = self.dimers[bp]["equi"]
+
+    #         stiff[6 * i : 6 * i + 6, 6 * i : 6 * i + 6] = pstiff
+    #         gs[i] = pgs
         
-    def load_from_file(self):
-        if self.method.lower() == 'md':
-            path = os.path.join(os.path.dirname(__file__), 'Parametrization/MolecularDynamics')
-        elif 'crystal' in self.method.lower():
-            path = os.path.join(os.path.dirname(__file__), 'Parametrization/Crystallography')
-        else:
-            raise ValueError(f'Unknown method "{self.method}".')
-        
-        bases = 'ATCG'
-        self.dimers = {}
-        for b1 in bases:
-            for b2 in bases:
-                seq = b1+b2
-                self.dimers[seq] = self.read_dimer(seq,path)
-                
-            
-    def read_dimer(self, seq: str, path: str):
-        fnstiff = glob.glob(path+'/Stiffness*'+seq+'*')[0]
-        fnequi  = glob.glob(path+'/Equilibrium*'+seq+'*')[0]
-        
-        equi = np.loadtxt(fnequi)
-        stiff = np.loadtxt(fnstiff)
-        equi_triad = so3.se3_midstep2triad(equi)                
-        stiff_group = so3.se3_algebra2group_stiffmat(equi,stiff,translation_as_midstep=True)  
-                      
-        dimer = {
-            'seq' : seq,
-            'group_gs':   equi_triad,
-            'group_stiff':stiff_group,
-            'equi': equi,
-            'stiff' : stiff
-            }
-        return dimer
-    
-    def gen_params(self, seq: str, use_group: str=True):
-        N = len(seq)-1
-        stiff = np.zeros((6*N,6*N))
-        gs    = np.zeros((N,6))
-        for i in range(N):
-            bp = seq[i:i+2].upper()
-            if use_group:
-                pstiff = self.dimers[bp]['group_stiff']
-                pgs    = self.dimers[bp]['group_gs']
-            else:
-                pstiff = self.dimers[bp]['equi']
-                pgs    = self.dimers[bp]['stiff']
-            
-            stiff[6*i:6*i+6,6*i:6*i+6] = pstiff
-            gs[i] = pgs
-        return stiff,gs 
-    
+    #     if sparse:
+    #         stiff = stiff.tocsc()
+    #     return stiff,gs
+
+  
 def read_nucleosome_triads(fn):
     data = np.loadtxt(fn)
     N = len(data) // 12
@@ -200,13 +148,6 @@ def read_nucleosome_triads(fn):
         tau[:3,3]  = pos
         nuctriads[i] = tau
     return nuctriads
-
-
-    
-
-        
-        
-        
 
 
 

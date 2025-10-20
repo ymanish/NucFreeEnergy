@@ -32,10 +32,11 @@ def nucleosome_free_energy(
     
         Fdict = {
             'F': F,
-            'F_entropy' : F,
-            'F_enthalpy'   : 0,
-            'F_jacob'   : 0,
-            'F_freedna'    : F,
+            'F_entropy'  : F,
+            'F_enthalpy' : 0,
+            'F_jacob'    : 0,
+            'F_freedna'  : F,
+            'gs'         : np.zeros(n)
         }
         return Fdict
     
@@ -99,8 +100,8 @@ def nucleosome_free_energy(
     ########################################
     ########################################
     if use_correction:
-        alpha = -MFi @ b
         
+        alpha = -MFi @ b
         gs_transf_perm = np.concatenate((alpha,C))
         gs_transf = P.T @ gs_transf_perm
         gs = inv_transform @ gs_transf
@@ -142,11 +143,12 @@ def nucleosome_free_energy(
         MFi = np.linalg.inv(MF)
         b = MM.T @ C
         
-        # alpha = -MFi @ b
-        # gs_transf_perm = np.concatenate((alpha,C))
-        # gs_transf = P.T @ gs_transf_perm
-        # gs = inv_transform @ gs_transf
-        # # gs = gs.reshape((len(gs)//6,6))
+    # Calculate ground state 
+    alpha = -MFi @ b
+    gs_transf_perm = np.concatenate((alpha,C))
+    gs_transf = P.T @ gs_transf_perm
+    gs = inv_transform @ gs_transf
+    # # gs = gs.reshape((len(gs)//6,6))
     
     # constant energies
     F_const_C =  0.5 * C.T @ MC @ C
@@ -166,13 +168,17 @@ def nucleosome_free_energy(
     ff_pi = -0.5*len(stiffmat) * np.log(2*np.pi)
     F_free = 0.5*ff_logdet + ff_pi
      
+     
+     
+     
     # prepare output
     Fdict = {
         'F': F_entropy + F_jacob + F_const_C + F_const_b,
-        'F_entropy' : F_entropy + F_jacob,
-        'F_enthalpy'   : F_const_C + F_const_b,
-        'F_jacob'   : F_jacob,
-        'F_freedna'    : F_free
+        'F_entropy'  : F_entropy + F_jacob,
+        'F_enthalpy' : F_const_C + F_const_b,
+        'F_jacob'    : F_jacob,
+        'F_freedna'  : F_free,
+        'gs'         : gs
     }
     return Fdict
 
